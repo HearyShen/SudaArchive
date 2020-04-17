@@ -1,0 +1,61 @@
+编写一个简单的内核模块
+实验目的
+　　Linux 操作系统的内核是单一体系结构(monolithic kernel)的，也就是说，整个内核是一个单独的非常大的程序。这样，系统的速度和性能都很好，但是可扩展性和维护性就相对比较差。为了弥补单一体系结构的这种缺陷，Linux操作系统使用了一种全新的机制－—模块机制，用户可以根据需要，在不需要对内核重新编译的情况下，模块能动态地载入内核或从内核移出。
+　　本实验通过分析代码，学习Linux 是如何实现模块机制的；通过一个实例，掌握如何编写模块程序并进一步掌握内核模块的机理。
+实验内容
+编写一个内核模块helloworld。当用insmod命令加载模块后，会显示
+　　HelloWorld ！
+此模块与Linux 内核模块机制兼容，可以用lsmod 命令显示模块信息，可以用rmmod命令删除该模块。
+实验提示
+一．helloworld.c
+#include <linux/init.h>
+#include <linux/module.h>
+MODULE_LICENSE("Dual BSD/GPL");
+static int hello_init(void)
+{
+　　printk(“<1> Hello World!\n”);
+　　return 0;
+}
+static void hello_exit(void)
+{
+printk(“ <1>Goodbye!\n”);
+}
+module_init(hello_init);
+module_exit(hello_exit);
+说明：
+1． 代码首先包含linux/module.H和linux/init.h这两个头文件，这些文件包含了对模块的结构定义以及模块的版本控制。文件里的主要数据结构在后面详细介绍。
+2. MODULE_LICENSE("Dual BSD/GPL")为模块许可声明，在2.6内核中是必需的，
+3．函数 hello_init( )和函数 hello_exit( )是模块编程中最基本的也是必须的两个函数。称为模块加载函数和模块卸载函数。在2.6中此函数名字常以“module_init（）”或“module_exit”形式指定。当然可以用户自己定义，这样的话需要在函数结束后加以说明。例如本程序。
+4. module_init向内核注册模块所提供的新功能；module_exit负责注销所有由模块注册的功能。但要注意参数名字要和用户自定义的要一致。
+3．注意在这儿使用的是printk 函数(不要习惯性地写成printf)，printk 函数是由linux内核定义的，功能与printf相似。字符串<1>表示消息的优先级，printk的一个特点就是它对于不同优先级的消息进行不同的处理，之所以要在这儿使用高优先级是因为默认优先级的消息可能不能显示在控制台上。可以用man命令寻求帮助。
+
+二，编译模块。在前面的章节里我们已经学习了如何使用gcc，现在还要注意的一点就是：确定你现在是超级用户，因为只有超级用户才能加载和卸载模块。
+另外需要说明的是：2.6的模块编译较为复杂，最好是写一个Makefile文件（M是大写）。
+文件内容如下：
+obj-m := helloworld.o
+在控制台输入命令：
+root# make -C /lib/modules/2.6.20/build/ M=/root/ modules
+注意2.6.20是随linux版本而变化的，注意你本机的内核版本将其替换即可。（这些其实都可以写入Makefile文件当中的，但Makefile文件语法较多，在此诸多不便，感兴趣可以参考相关文档）
+三，加载模块：
+root# insmod ./helloworld.ko
+注意：1.编译成功后，会出现.ko 的文件。
+　　  2.此例是在root目录下，如是其他目录下，改变路径即可。
+      3，特别注意的是，此命令在图形见面下可以加载，但是看不到结果，需要登陆字符界面。同时按ctrl+alt+f1 皆可迅速转到字符界面。ctrl+alt+f7可转到图形界面。顺利的话就会看到：
+HelloWorld!
+这个时候，helloworld模块就已经加载到内核中了。我们可以使用lsmod命令查看。lsmod命令的作用是告诉我们所有在内核中运行的模块的信息，包括模块的名称，占用空间的大小，使用计数以及当前状态和依赖性。
+四，查看模块：
+root# lsmod 
+Module Size Used by
+....
+helloworld 464 0 (unused)
+…
+出来目前机器加载的所有模块，仔细查看有没有helloworld。
+五，卸载模块。
+root# rmmod helloworld
+同样是在字符界面，顺利的话可以看到：
+Goodbye！
+如果这时候再使用lsmod查看，发现helloworld模块已经不在了。
+
+还有一点注意的是：在加载模块的时候第一次加载是成功的，如在没卸载的情况下在加载一次的话，系统会报错。这是就用到lsmod命令，如果已经加载过，卸载了即可。
+
+关于insmod和rmmod 这两个命令，是两个用于把模块插入内核和从内核移走模块的实用程序。前面用到的insmod, rmmod和lsmod都属于modutils模块实用程序。

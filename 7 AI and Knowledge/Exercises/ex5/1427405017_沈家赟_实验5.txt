@@ -1,0 +1,95 @@
+苏州大学实验报告
+院、系	计算机学院	
+年级专业	14计科	
+姓名	沈家赟	
+学号	1427405017
+课程名称	人工智能与知识工程	
+成绩	
+指导教师	无	
+同组实验者	无	
+实验日期	2016年11月25日
+ 
+
+实 验 名 称	实验五 机器翻译系统实验
+
+一.	实验目的
+选择一种方法，练习机器翻译的相关技术。
+
+二.	实验内容
+以下两个系统任选其一：
+1. 采用传统统计机器翻译方法，基于Moses，在wmt 2015数据上训练一个翻译系统，任选wmt'15给定的语言对，实现该语言对的翻译
+系统和数据下载链接： http://www.statmt.org/wmt15/translation-task.html
+
+2. 采用神经机器翻译方法，基于Groundhug，在wmt 2015数据上训练一个翻译系统。
+数据链接见1，系统链接如下：https://github.com/lisa-groundhog/GroundHog
+
+三.	实验步骤和结果
+1、找到Github上的GroundHog.
+ 
+
+
+
+
+2、语料资源
+ 
+ 
+
+3、安装groundhog包
+ 
+反复遭遇链接问题！
+
+	我尝试在Github上直接下载、解压并上传至CVM中，以便后续执行。
+
+Github主页给出的命令如下：
+python setup.py develop --user
+ 
+默认执行会出现错误，无法导入setuptools包。
+
+我改成了：
+python3 setup.py develop --user
+再次执行，可以进入安装程序。
+ 
+
+使用离线安装程序安装，需要链接相关服务器，安装其他包，如Theano。
+ 
+再次遭遇链接错误，无法顺利执行！
+
+ 
+
+
+
+4、神经网络翻译训练
+根据GroundHog主页提示，神经网络机器翻译相关代码位于GroundHog包的/expriments/nmt路径中。
+
+
+训练脚本（Python代码），为 
+train.py
+
+ 
+
+
+
+执行 train.py 代码会在当前目录下开始训练，最多将耗费20分钟用于建立神经网络模型并精心编译。
+
+案例代码为 sample.py
+sample.py --beam-search --state your_state.pkl your_model.npz
+运行此调用即可运行案例。
+
+
+实际运行：
+ 
+
+另须安装python-dev !
+然而安装了python-dev后再进行还是出错。
+ 
+使用python3和python2均运行了train和sample代码脚本。
+
+
+
+5、可接受的训练数据
+ 
+GroundHog接受以上五种类型的训练数据。
+
+四.	实验总结
+本次实验是机器翻译实验，通过神经网络的翻译方法，借助GoundHog包，在wmt 2015数据上训练一个翻译系统。
+

@@ -1,0 +1,188 @@
+     模块编程实验
+
+【实验目的】                                        
+　　通过学习内核模块的编写和运行，了解模块是Linux OS的一种特有的机制，可根据用户的实际需要在不需要对内核进行重新编译的情况下，模块能在内核中被动态地加载和卸载。
+    编写一个模块，将它作为Linux OS内核空间的扩展来执行，并通过insmod命令来手工加载，通过命令rmmod来手工卸载。                         
+
+【准备知识】                                     
+　　Linux模块是一些可以作为独立程序来编译的函数和数据类型的集合。在装载这些模块时，将它的代码链接到内核中。Linux模块有两种装载方式：
+   静态装载（内核启动时装载）和动态装载（在内核运行过程中装载）。若在模块装载之前就调用了动态模块的一个函数，则此调用将失败；若模块已被装载，则内核就可以使用系统调用，并将其传递到模块中的相应函数。
+   模块通常用来实现设备驱动程序（这要求模块的API和设备驱动程序的API相一致）。模块可用来实现所期望的任何功能。 
+                                                               
+一．模块的组织结构                                                                                            
+　　模块一旦被装载进系统，就在内核地址空间中管态下执行。它就像任何标准的内核代码一样成为内核的一部分，并拥有其它内核代码相同的权限和职责（当然也会引起系统的崩溃）。
+若模块知道内核数据结构的地址，则它可以读写内核数据结构。但Linux是一个整体式的内核（monolithic kernel）结构，整个内核是一个单独的且非常大的程序，从而存在一个普遍的问题：
+在一个文件中实现的函数可能需要在其它文件中定义的数据。在传统的程序中，这个问题是通过链接编辑器在生成可执行对象文件时，使用链接编辑器可以解析的外部（全局）变量来解决的。
+又因为模块的设计和实现与内核无关，所以模块不能靠静态链接通过变量名引用内核数据结构。恰好相反，Linux内核采用了另外一种机制：实现数据结构的文件可以导出结构的符号名
+（可以从文件/proc/ksyms或文件/…/kernel/ksyms.c中以文本方式读取这个公开符号表），这样在运行时就可以使用这个结构了。不过在编写模块的过程中，编写（修改）导出变量时要格外注意，
+因为通过修改变量会修改内核的状态，其结果可能并不是内核设计者所期望的。在确信自己了解修改内核变量的后果之前，应该对这些变量只进行读操作。                                                                                                                     
+　　模块作为一种抽象数据类型，它具有一个可以通过静态内核中断的接口。最小的模块结构必须包括两个函数，它们在系统装载模块和卸载模块时调用，分别是init_module()和cleanup_module()。
+可以编写一个只包括这两个函数的模块，这样该模块中唯一会被调用的函数就是模块被装载时所调用的函数init_module()和模块被卸载时所调用的函数cleanup_module()。
+并且用函数init_module()来启动模块装载期间的操作，用函数cleanup_module()来停止这些操作。                                                                                
+　　由于模块可以实现相当复杂的功能，故可以在模块中加入很多新函数以实现所要期望的功能。不过加入模块的每个新函数都必须在该模块装载到内核中时进行注册。若该模块是静态装载的，
+则该模块的所有函数都是在内核启动时进行注册的；若该模块是动态装载的，则这些新函数必须在装载这个模块时动态注册。当然，如果该模块被动态卸载了，则该模块的函数都必须从系统中注销。
+通过这种方式，当这个模块不在系统中时，就不能调用该模块的函数。其中注册工作通常是在函数init_module()中完成的，而注销工作通常是在函数cleanup_module()中完成的。   
+                                                                                                                                      
+由上述定义的模块应有如下的格式：                                                                                                   
+　　#include  <linux/kernel.h>                                                                                                   
+　　#include  <linux/module.h>                                                                                                              
+　　… …　　　// 其它header信息                                                                                                       
+　　int init_module( )                                                                                                         
+　　{                                                                                                                                     
+　　　　… …    // 装载时，初始化模块的编码                                                                                                                     
+　　}                                                                                                                                 
+　　　… …                                                                                                                                                          
+      … …    // 期望该模块所能实现的一些功能函数，如open()、release()、write()、                                                                     
+　　　　　　　//  read()、ioctl()等函数                                                                                     
+　　　… …      
+                                                                                                
+　　void cleanup_module( )                                                                                                        
+　　{                                                                                                        
+　　　　… …  // 卸载时，注销模块的编码                                                                                                               
+　　｝ 
+                                                                                                                        
+二．模块的编译                                                                                 
+　　一旦设计并编写好模块，必须将其编译成一个适合内核装载的对象文件。由于编写模块是用C语言来完成的，故采用gcc编译器来进行编译。若需要通知编译程序把这个模块作为内核代码
+而不是普通的用户代码来编译，则就需向gcc编译器传递参数“-D_ _KERNEL_ _”；若需要通知编译程序这个文件是一个模块而不是一个普通文件，则就需向gcc编译器传递参数“-DMODULE”；
+若需要对模块程序进行优化编译、连接，则就需使用“-O2”参数；若还需要对装载后的模块进行调试，则就需使用“-g”参数；同时需要使用“-Wall”参数来向装载程序传递all，
+使用“-c”开关通知编译程序在编译完这个模块文件后不调用链接程序。 
+                                                           
+一般编译模块文件的命令格式如下：                                                                                 
+　　#gcc -O2 -g　-Wall -DMODULE -D_ _KERNEL_ _ -c filename.c   　　　//filename.c为自己编写的模块程序源代码文件                 
+
+   执行命令后就会得到文件filename.o，该文件就是一个可装载的目标代码文件。      
+
+三．模块的装载                                                                                           
+　　内核模块的装载方式有两种。一种是使用insmod命令手工装载模块；另一种是请求装载demand loading（在需要时装载模块），即当有必要装载某个模块时，若用户安装了核心中不存在的文件系统时，
+核心将请求内核守护进程kerneld准备装载适当的模块。该内核守护进程是一个带有超级用户权限的普通用户进程。此实验中我们主要采用insmod命令手工装载模块。                                                                                                                                            
+　　系统启动时，kerneld开始执行，并为内核打开一个IPC通道，内核通过向kerneld发送消息请求执行各种任务。kerneld的主要功能是装载和卸载内核模块，kerneld自身并不执行这些任务，
+它通过某些程序（如insmod）来完成。Kerneld只是内核的代理，只为内核进行调度。                                                                                                               
+　　insmod程序必须找到请求装载的内核模块（该请求装载的模块一般被保存在/lib/modules/kernel-version中）。这些模块与系统中其它程序一样是已连接的目标文件，但不同的是它们被连接成
+可重定位映象（即映象没有被连接到在特定的地址上运行，其文件格式是a.out或ELF）。亦就是说，模块在用户空间（使用适当的标志）进行编译，结果产生一个可执行格式的文件。
+在用insmod命令装载一个模块时，将会发生如下事件：                                                                                                              
+　　（1）新模块（通过内核函数create_module()）加入到内核地址空间。                                                                              
+　　（2）insmod执行一个特权级系统调用get_kernel_syms()函数以找到内核的输出符号（一个符号表示为符号名和符号值，如地址值）。                                                                                                              
+　　（3）create_module()为这个模块分配内存空间，并将新模块添加在内核模块链表的尾部，然后将新模块标记为UNINITIALIZED（模块未初始化）。                                                                                              
+　　（4）通过init_module()系统调用装载模块。（该模块定义的符号在此时被导出，供其它可能后来装载的模块使用）                                                                                                                
+　　（5）insmod为新装载的模块调用init_module()函数，然后将新模块标志为RUNNING（模块正在运行）。                                                                                                            
+　　在执行完insmod命令后，就可在/proc/modules文件中看到装载的新模块了。（为证实其正确性，可在执行insmod命令之前先查看/proc/modules文件，执行之后再查看比较）    
+                                                                                                                                        
+四．模块的卸载                                                                                                                                    
+　　当一个模块不需要使用时，可以使用rmmod命令卸载该模块。由于无需连接，故它的任务比加载模块要简单得多。但如果请求装载模块在其使用计数为0时，kerneld将自动从系统中卸载该模块。
+卸载时调用模块的cleanup_module()释放分配给该模块的内核资源，并将其标志为DELETED（模块被卸载）；同时断开内核模块链表中的连接，修改它所依赖的其它模块的引用，重新分配模块所占的内核内存。 
+                                                                                               
+五．模块程序中管理模块的几个文件操作                                                                             
+　　在内核内部用一个file结构来识别模块，而且内核使用file_operatuions结构来访问模块程序中的函数。file_operatuions结构是一个定义在<linux/fs.h>中的函数指针表。管理模块的文件操作，
+通常也称为“方法”，它们都为struct file_operations提供函数指针。在struct file_operations中的操作一般按如下顺序出现，除非说明，它们返回0值时表示访问成功；发生错误时返回一个负的错误值（目前共有13个操作）：                                                                                                                                              
+　　int (*lseek) ()、int (*read)()、int (*write)()、int (*readdir)()、int (*select)()、int (*ioctl)()、int (*mmap)()、int (*open)()、void (*release)()、int (*fsync)()、int (*fasync)()、
+int (*check_media_change)()、int (*revalidate)()    
+                                                                                                                      
+下面我们只简单介绍其中的几个操作，其它在以后涉及时再介绍:      
+                                                               
+1、方法int (*read)(struct inode *,struct file *,char *, int)                                                                
+    该方法用来从模块中读取数据。当其为NULL指针时将引起read系统调用返回-EINVAL（“非法参数”）。函数返回一个非负值表示成功地读取了多少字节。     
+                                                                      
+2、方法int (*write)(struct inode *,struct file *,const char *, int)                                                                                             
+    该方法用来向模块发送数据。当其为NULL指针时将引起write系统调用返回-EINVAL。如果函数返回一个非负值，则表示成功地写入了多少字节。   
+                                                        
+3、方法int (*open)(struct inode *,struct file *)                                                     
+　　该方法是用来打开模块的操作，它是操作在模块节点上的第一个操作，即使这样，该方法还是可以为NULL指针。如果为NULL指针，则表示该模块的打开操作永远成功，但系统不会通知你的模块程序。  
+                                                                                    
+4、方法void (*release)(struct inode *,struct file *)                                                                         
+  　该方法是用来关闭模块的操作。当节点被关闭时就调用这个操作。与open类似，release也可以为NULL指针。         
+                                                                                                        
+　　当在你的模块中需要上面这些方法时，相应的方法若没有，则在struct file_operations中相应的地方将其令为NULL指针。这样我们需要的大概象下面这样：                                                                                                                         
+struct file_operations　modulename_fops ={                                                                                 
+    NULL,               // modulename_lseek                                                                   
+    modulename_read,                                                                                        
+    modulename_write,                                                                                                       
+    NULL,               // modulename_readdir                                                                          
+    NULL,               // modulename_select                                                                                  
+    NULL,               // modulename_ioctl                                                                          
+    NULL,               // modulename_mmap                                                                        
+    modulename_open,                                                                                                       
+    modulename_release,                                                                                           
+    NULL,               // modulename_fsync                                                                         
+    NULL,               // modulename_fasync                                                                            
+    NULL,               // modulename_check_media_change                                                               
+    NULL                // modulename_revalidate                                                                                                     
+} 
+                                                                                                  
+【实验内容】                                                                                                 
+　　1、编写一个简单的内核模块，该模块至少需要有两个函数：一个是init_module()函数，在把模块装载到内核时被调用，它为内核的某些东西注册一个处理程序，或是用自身的代码取代某个内核函数；
+       另一个是cleanup_module()函数，在卸载模块时被调用，其任务是清除init_module()函数所做的一切操作。编写完成后进行该模块的编译、装载和卸载操作。                                                                                                                  
+　　2、向上面模块中再添加一些新函数，如open()、release()、write()和read()函数，并编写一个函数来测试你的模块能否实现自己添加的函数的功能。其中open()、release()和write()函数都可以是空操作
+       或较少的操作，它们仅仅为结构file_operations提供函数指针。 
+                                                                                                           
+【实验指导】    
+                                                                 
+1　一个简单的内核模块   （可打印输出Hello World!）
+                                                                                   
+1.1　必要的header文件：                                                                                                                                                           
+　　除了前面讲到的头文件#include <linux/kernel.h>和#include <linux/module.h>外，如果你的内核打开了版本检查，那么我们就还必须增加头文件#include <linux/modversions.h>，否则就会出错。    
+                                                                       
+1.2  init_module()函数：                                                                                        
+　　由于题目的要求不高，故可只在该函数里完成一个打印功能，如printk(“Hello! This is a testing module!\n”)；等。为便于检查模块是否装载成功，我们可以给一个返回值，如return 0；
+若返回一个非0值，则表示init_module()失败，从而不能装载模块。                                                       
+                                                 
+1.3  cleanup_module()函数：                                                                                        
+　　只需用一条打印语句来取消init_module()函数所做的打印功能操作就可以了，如printk(“Sorry! The testing module is unloaded now!\n”)；等。 
+
+1.4  模块的编写：                                                                                                                   
+　　此处把该模块文件取名为testmodule.c                                                                                                             
+        #include  <linux/kernel.h>    // 在内核模块中共享                                                                                    
+        #include  <linux/module.h>    // 一个模块                                                                                                     
+   //处理CONFIG_MODVERSIONS                                                                                      
+　　…
+　　
+　　int init_module()       // 初始化模块                                                                                                                            
+    {                                                                                                                                                                            
+　　		…
+　　}                                                                                                  
+    void cleanup_module()   // 取消init_module()函数所做的打印功能操作                                                                                                
+    {                                                                                                           
+ 		…
+　　}        
+                                                                                                        
+1.5  模块的编译、装载和卸载：                                                                                                                                     
+　　[root@linux /]# gcc –O2 –Wall –DMODULE –D__KERNEL__ -c testmodule.c                                                                  
+    [root@linux /]# ls –s   //在当前目录下查看生成的目标文件testmodule.o                                                                                          
+　现在，模块testmodule已经编译好了。用下面命令将它装载到系统中：                                                                                                                   
+　　[root@linux /]# insmod –f testmodule.o                                                                                            
+   如果装载成功，则在/proc/modules文件中就可看到模块testmodule，并可看到它的主设备号。同时在终端显示你所编写的转载提示用语。                                                                                           
+　　如果要卸载，就用如下命令：                                                                                                
+        [root@linux /]# rmmod testmodule                                                                                    
+　　如果卸载成功，则在/proc/devices文件中就可看到模块testmodule已经不存在了。同时在终端显示你所编写的退出提示用语。
+
+2  向testmodule模块中添加新函数open()、release()、write()和read()                                                                                                               
+2.1  函数open( )                                                                                                                   
+　　　int open(struct inode *inode，struct file *filp) {                                                                             
+　　　	…
+　　　}                                                                                                                                                        
+2.2  函数release( )                                                                                                                                                   
+        void release(struct inode *inode，struct file *filp) {                                                                                                            
+　　　　　　…
+　　　　　　         }   
+2.3  函数 read()                                                                                                                                             
+ int  read(struct inode *inode，struct file *filp，char *buf，int count) {                                                                           
+　　　　…
+   }                                                                                                                           
+2.4  函数write()                                                                                             
+int  write(struct inode *inode，struct file *filp，const char *buf，int count){                                                                                                                                                          
+　　　…
+  }    
+                                                                                                        
+3  模块的测试                                                                                                             
+　　在该模块程序编译加载后，再在/dev目录下创建模块设备文件moduledev，使用命令: 
+     #mknod  /dev/moduledev  c  major  minor     //其中“c”表示moduledev是字符设备，“major”是moduledev的主设备号。 
+（该字符设备驱动程序编译加载后，可在/proc/modules文件中获得主设备号，或者使用命令:  
+ [root@linux /]#cat /proc/modules | awk ”\\$2==\” moduledev\”{ print\\$1}” 获得主设备号）
+
+测试函数结构如下：    
+　　#include  <stdio.h>                                                                                             
+　　#include  <sys/types.h>                                                                                 
+　　#include  <sys/stat.h>                                                                                 
+　　#include  <fcntl.h>                                                                                                  
+main ( ) { 
+ …
+　　}                                                                                                           

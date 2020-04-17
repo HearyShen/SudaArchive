@@ -1,0 +1,203 @@
+苏州大学实验报告
+院、系	计算机学院	
+年级专业	14计科	
+姓名	沈家赟	
+学号	1427405017
+课程名称	人工智能与知识工程	
+成绩	
+指导教师	熊得意	
+同组实验者	无	
+实验日期	2016年11月25日
+ 
+
+实 验 名 称	实验四 基于循环神经网络的语言模型实验
+
+一.	实验目的
+1、学习使用torch，练习循环神经网络；
+二.	实验内容
+1. 写一个程序，在一个给定的语料库上训练一个tri-gram语言模型
+2. 根据这个语言模型，生成一个1000个单词的文本
+3. 下载一个rnn lstm，在给定文本中训练一个neural language model，然后根据该model生成一段文本
+http://karpathy.github.io/2015/05/21/rnn-effectiveness
+https://github.com/karpathy/char-rnn
+
+三.	实验步骤和结果
+1、找到github上的char-rnn
+ 
+ 
+2、安装torch等组件
+ 
+安装配置命令如下：
+$ curl -s https://raw.githubusercontent.com/torch/ezinstall/master/install-deps | bash
+$ git clone https://github.com/torch/distro.git ~/torch --recursive
+$ cd ~/torch; 
+$ ./install.sh      # and enter "yes" at the end to modify your bashrc
+$ source ~/.bashrc
+
+安装过程中因链接问题遇到错误问题，连续几次重新删除再安装也仍然无法安装。（获取包时提前遇到EOF）。
+
+ 
+网络读取early EOF问题解决后，又出现了openBLAS编译问题，以及asm编译出错。
+
+我查找了网上的资料并和同学探讨，得知可能与ubuntu server不合，我尝试了在虚拟机中再次安装，并依照（http://www.linuxdiyf.com/linux/18979.html ）提供的思路安装。
+
+git clone https://github.com/torch/distro.git ~/torch --recursive
+cd ~/torch;
+bash install-deps;
+./install.sh
+source ~/.bashrc
+source ~/.profile
+注意：在执行 bash install-deps; 时会遭遇报错，与openBLAS有关，无视、跳过。
+再执行 ./install.sh 即可顺利安装。
+ 
+
+
+
+数据：
+ 
+char-rnn-master 包中附带了测试数据——input.txt，包含约1M的英文语料数据；
+
+
+
+
+3、训练（Training）
+使用train.lua脚本可以训练神经网络模型
+$ th train.lua -gpuid -1
+-gpuid参数是设置使用的GPU，-1为不采用GPU运算，本实验中使用CPU运算。
+
+
+成功开始计算：
+ 
+
+循环计算中：
+ 
+
+由于ubuntu server上死活装不上，只好再ubuntu虚拟机里测试，平均每次需要计算0.8秒左右，实际需要执行21150次，预计实际耗时将在5小时以上。
+
+训练目录及参数设置：
+$ th train.lua -data_dir data/some_folder -rnn_size 512 -num_layers 2 -dropout 0.5
+
+-gpuid 不设置则默认为0，使用GPU；
+-data_dir 设置训练语料的数据路径；
+-rnn_size 设置循环神经网络大小尺寸；
+-num_layers 设置神经网络层数；
+
+
+经过漫长的等待，终于训练完成。
+ 
+训练结果如图所示。
+
+
+
+
+
+
+
+
+
+样本：
+生成的checkpoint在子目录cv中，如图：
+ 
+
+通过：
+th sample.lua cv/lm_lstm_epoch50.00_1.4254.t7 -gpuid -1
+即可实现样本输出（sample）；
+
+此文件为本机生成的checkpoint文件名，因具体情况而需要调整。
+ 
+ 
+
+短对话文本如下：
+
+jiayun@ubuntu:~/char-rnn$ th sample.lua cv/lm_lstm_epoch50.00_1.4254.t7 -gpuid -1
+creating an lstm...	
+missing seed text, using uniform probability over first character	
+--------------------------	
+gries:
+The rues makes release so leave of whence,
+In heavy servants happinest request,
+To deep; hence, that has murdered, love,
+Unberthamed and putt till all the rose's spleen,
+I'll warrant thee the tide and goodly suitors' chief,
+Or if you'lk her unwilling.
+
+MENENIUS:
+Be I thou abstrar married thing.
+
+GONZALO:
+My lord, the bride interchange of thy balfold
+hath contented off. Millabry--it, presently and still did weep
+The true resolve me,' Tauths lies are chance:
+That hour shall you be my good lord:
+I were myself and my deceived thee's grave,
+I must hall, Aufidius drunken-viones! Aluse?
+There'eld 't have heard him shall eat say, dis deny.
+
+BIANCA:
+
+Numst:
+Petremble than I'll have our golden merle;
+The second haste the fault me speak about,
+And most compassion been an Edward-alacread,
+That's faults.
+
+LUCIO:
+
+PARIS:
+Pray, be undranced, that's a pophes' hatceful
+palenter'd with a time becaunts for war I am to him.
+
+Second Gentleman:
+His youth and chambers, I did.
+
+POLIXENES:
+HEswere, good death! they say, my lords, but love's before.
+
+DUCHESS:
+What, with't me spare,
+Have welcomed, and bid me so.
+
+SICINIUS:
+Yet he underfise.
+
+KING RICHARD III:
+Why stinker pail of him?
+
+GREMIO:
+No, He no master's virtues of boson:
+We do, trough.
+
+DUCHESS OF YORK:
+I have done your captive unlawness haveing own: and
+this is your firth,--
+
+STALEBIO:
+Then the right Petcal: who is not most relikes
+In sudee up Mowbray your missate! where no haris,
+called his weaken son: wherefore dost thou know't? nurse'd a highnoss.
+
+Messenger:
+The matter of myself. Condilly thou,
+And here Hereford denied lambs one their
+course merry ten to gride senlest man once forsoun
+Out out of spair I sue, the pleasure o' the grievous;
+Must in the winds and neck. Pray a fee thou fallest,
+I will prove deess: thou coloures of your share request;
+Briend holy swear, food, which he cause no thing
+Did welcome towards not more, if I spean'd,
+When they disdemberfully how they will keep
+To go-nI her.
+
+CORIOLANUS:
+O, thou shall he
+
+
+
+
+< 实验成功 >
+
+四.	实验总结
+本次实验是基于神经网络的机器翻译实验，借助Torch工具及1M左右的语料数据实现三元模型（trigram）的英文机器翻译。
+实验通过学习安装、使用（Train, Sample），成功地实现了语料训练和短对话样本输出。这份实验虽然过程遇到了诸多困难， 但结果令我眼前一亮，藉此，循环神经网络给我留下了很深的印象。
+
+ 
